@@ -142,6 +142,49 @@ def run2(filename: str):
         print(f"{k}={d.min}/{d.mean/d.n}/{d.max}")
 
 
+def run2_less_cond(filename: str):
+    class Data:
+        def __init__(self):
+            self.min = 200.0
+            self.mean = 0.0
+            self.max = -200.0
+            self.n = 0
+
+    data: dict[str, Data] = {}
+    count = 0
+
+    f = open(filename, "r")
+    for line in f:
+        count += 1
+        if count % 50_000_000 == 0:
+            print(count)
+            break
+
+        name, temp = line.split(";")
+        temp_f = float(temp)
+
+        d = data.get(name)
+        if d is None:
+            d = Data()
+            data[name] = d
+
+        d.mean += temp_f
+        d.n += 1
+        if temp_f < d.min:
+            d.min = temp_f
+            continue
+
+        if temp_f > d.max:
+            d.max = temp_f
+
+    f.close()
+    print("done processing")
+
+    for k in sorted(data):
+        d = data[k]
+        print(f"{k}={d.min}/{d.mean/d.n}/{d.max}")
+
+
 def run2_slots(filename: str):
     class Data:
         __slots__ = ["min", "mean", "max", "n"]
@@ -236,11 +279,104 @@ def run2_slots_less_cond(filename: str):
         print(f"{k}={d.min}/{d.mean/d.n}/{d.max}")
 
 
+def run2_list_less_cond(filename: str):
+    data: dict[str, list[float]] = {}
+    count = 0
+
+    f = open(filename, "r")
+    for line in f:
+        count += 1
+        if count % 50_000_000 == 0:
+            print(count)
+            break
+
+        name, temp = line.split(";")
+        # TODO: maybe create my own float convertions that assumes correct input
+        temp_f = float(temp)
+
+        d = data.get(name)
+        if d is None:
+            d = [200.0, 0.0, -200.0, 0.0]
+            data[name] = d
+
+        d[3] += 1
+        d[1] += temp_f
+        if temp_f < d[0]:
+            d[0] = temp_f
+            continue
+
+        if temp_f > d[2]:
+            d[2] = temp_f
+
+    f.close()
+    print("done processing")
+
+    # TODO: is data.items() better than data[k]
+    for k in sorted(data):
+        d = data[k]
+        # TODO: string builder ?
+        # TODO: only print once in the end?
+        print(f"{k}={d[0]}/{d[1]/d[3]}/{d[2]}")
+
+
+def run2_tuple(filename: str):
+    data: dict[str, tuple[float, float, float, float]] = {}
+    count = 0
+
+    f = open(filename, "r")
+    for line in f:
+        count += 1
+        if count % 50_000_000 == 0:
+            print(count)
+            break
+
+        name, temp = line.split(";")
+        # TODO: maybe create my own float convertions that assumes correct input
+        temp_f = float(temp)
+
+        old_min: float
+        old_mean: float
+        old_max: float
+        old_n: float
+        d = data.get(name)
+        if d is None:
+            old_min = 200.0
+            old_mean = 0.0
+            old_max = -200.0
+            old_n = 0.0
+        else:
+            old_min, old_mean, old_max, old_n = d
+
+        new_n = old_n + 1
+        new_mean = old_mean + temp_f
+        if temp_f < old_min:
+            new_min = temp_f
+        else:
+            new_min = old_min
+
+        if temp_f > old_max:
+            new_max = temp_f
+        else:
+            new_max = old_max
+
+        data[name] = (new_min, new_mean, new_max, new_n)
+
+    f.close()
+    print("done processing")
+
+    # TODO: is data.items() better than data[k]
+    for k in sorted(data):
+        d = data[k]
+        # TODO: string builder ?
+        # TODO: only print once in the end?
+        print(f"{k}={d[0]}/{d[1]/d[3]}/{d[2]}")
+
+
 if __name__ == "__main__":
     from time import time as t
 
     filename = "../1brc/measurements.txt"
-    out: list[str] = []
+    out: list[tuple[str, float]] = []
 
     @dataclass
     class InData:
@@ -251,10 +387,15 @@ if __name__ == "__main__":
         InData(run, "run(dict)"),
         InData(run_typed_dict, "run_typed_dict(dict)"),
         InData(run2, "run2(class)"),
+        InData(run2_less_cond, "run2_less_cond(class)"),
         InData(run2_slots, "run2_slots(class)"),
         InData(run2_slots_less_cond, "run2_slots_less_cond(class)"),
+        InData(run2_list_less_cond, "run2_list_less_cond(list)"),
+        InData(run2_tuple, "run2_tuple(tuple)"),
         # TODO: what about tuples ?
         # TODO: what about sorting while storing, knowing that keys are city names
+        # TODO: update all versions to be with less_cond for fairer comparison
+        # TODO: check if reading more lines in 1 go helps - less IO calls
     )
     # TODO: what about preallocate a dict as follows
     """
@@ -280,7 +421,10 @@ if __name__ == "__main__":
     for in_ in inputs:
         start = t()
         in_.fn(filename)
-        out.append(f"---{in_.label}: {t()-start}")
+        out.append((f"---{in_.label}: ", t() - start))
 
+    out = sorted(out, key=lambda x: x[1])
+
+    print("\nResults")
     for l in out:
-        print(l)
+        print(*l)
