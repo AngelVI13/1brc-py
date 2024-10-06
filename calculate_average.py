@@ -422,6 +422,7 @@ if __name__ == "__main__":
         start = t()
         in_.fn(filename)
         out.append((f"---{in_.label}: ", t() - start))
+        # TODO: manually trigger gc before next fn call for fairness
 
     out = sorted(out, key=lambda x: x[1])
 
